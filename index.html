@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>SalzburgNetz – Routen-Planer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background: #fff; margin:0; }
+        header {
+            background: #fff;
+            color: #222;
+            text-align: center;
+            padding: 2rem 0 1rem 0;
+        }
+        .logo {
+            height: 80px;
+            margin-bottom: 10px;
+            max-width: 95vw;
+        }
+        main {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 30px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px #0001;
+        }
+        footer {
+            background: #FF4B2B;
+            color: #fff;
+            text-align: center;
+            padding: 1rem;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+        .file-list { margin: 20px 0; }
+        select, input[type="text"], button {
+            font-size: 1.2rem;
+            margin: 12px 0;
+            padding: 14px;
+            border-radius: 6px;
+        }
+        #stationList {
+            width: 100%;
+            height: 180px;
+            margin-top: 12px;
+            font-size: 1.1rem;
+        }
+        .type-select { margin-bottom: 16px; }
+        .upload-label {
+            background: #FF416C;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-right: 10px;
+            display:inline-block;
+            font-size: 1.1rem;
+        }
+        .upload-label:hover { background: #FF4B2B; }
+        .file-input { display: none; }
+        @media (max-width: 600px) {
+            main {
+                max-width: 99vw;
+                margin: 10px 0;
+                padding: 10px 2vw;
+            }
+            .logo { height: 54px; }
+            select, input[type="text"], button {
+                font-size: 1.01rem;
+                padding: 11px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <!-- Logo als Bilddatei, muss im selben Ordner liegen! -->
+        <img class="logo" src="SalzburgNetz_Logo.png" alt="SalzburgNetz Logo">
+        <div>Routen-Planer (ASC-Upload, flexibles Format)</div>
+    </header>
+
+    <main>
+        <div>
+            <b>1. ASC-Datei(en) auswählen:</b>
+            <label class="upload-label">
+                ASC-Dateien auswählen
+                <input type="file" class="file-input" id="ascFiles" accept=".asc" multiple>
+            </label>
+        </div>
+        <div id="loadedTypes"></div>
+        <hr>
+        <div>
+            <label for="stationType" class="type-select"><b>2. Stationstyp wählen:</b></label>
+            <select id="stationType"><option value="">Bitte erst .asc-Datei(en) hochladen!</option></select>
+        </div>
+        <div>
+            <label for="stationSearch"><b>3. Station suchen:</b></label>
+            <input type="text" id="stationSearch" placeholder="Stationsname...">
+        </div>
+        <select id="stationList" size="8"></select>
+        <br>
+        <button id="showRoute" disabled>Route zu Station in Google Maps</button>
+    </main>
+    <footer>
+        &copy; 2025 SalzburgNetz
+    </footer>
+    <script>
+        // Flexible ASC-Parser (erkennt Komma, Tab, Leerzeichen; Name mit/ohne Anführungszeichen)
+        function parseASC(text) {
+            const lines = text.split(/\r?\n/);
+            let stations = [];
+            for (let line of lines) {
+                line = line.trim();
+                if (!line || line.startsWith('#')) continue;
+                // Splitte an Tab, Komma oder mehreren Leerzeichen
+                let parts = line.split(/\s+|,|\t/).filter(Boolean);
+                if (parts.length >= 3) {
+                    let lng = parseFloat(parts[0].replace(',', '.'));
+                    let lat = parseFloat(parts[1].replace(',', '.'));
+                    // Rest als Name (mit oder ohne Anführungszeichen)
+                    let name = parts.slice(2).join(' ').replace(/^"+|"+$/g, '').trim();
+                    if (!isNaN(lat) && !isNaN(lng) && name.length > 0) {
+                        stations.push({ name, lat, lng });
+                    }
+                }
+            }
+            return stations;
+        }
+
+        // Datenspeicher für alle Typen und deren Stationen
+        let allStations = {};
+        let currentType = '';
+        let currentList = [];
+
+        // Dateiupload-Handler
+        document.getElementById('ascFiles').addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            if (!files.length) return;
+            let loaded = 0;
+            allStations = {};
+            for (const file of files) {
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    // Stationstyp-Name aus Dateiname (ohne .asc)
+                    let type = file.name.replace(/\.asc$/i, '');
+                    let stations = parseASC(ev.target.result);
+                    allStations[type] = stations;
+                    loaded++;
+                    // Wenn alle fertig geladen, UI aktualisieren
+                    if (loaded === files.length) {
+                        updateTypeDropdown();
+                        showLoadedTypes();
+                    }
+                };
+                reader.readAsText(file, 'UTF-8');
+            }
+        });
+
+        function updateTypeDropdown() {
+            const typeSel = document.getElementById('stationType');
+            typeSel.innerHTML = '<option value="">-- Typ wählen --</option>';
+            Object.keys(allStations).forEach(type => {
+                const opt = document.createElement('option');
+                opt.value = type;
+                opt.innerText = type;
+                typeSel.appendChild(opt);
+            });
+            document.getElementById("stationList").innerHTML = '';
+            document.getElementById("showRoute").disabled = true;
+        }
+        function showLoadedTypes() {
+            const div = document.getElementById('loadedTypes');
+            if (Object.keys(allStations).length) {
+                div.innerHTML = "Geladene Typen: " + Object.keys(allStations).join(', ');
+            } else {
+                div.innerHTML = "";
+            }
+        }
+        document.getElementById("stationType").addEventListener("change", function() {
+            currentType = this.value;
+            document.getElementById("stationList").innerHTML = "";
+            document.getElementById("stationSearch").value = "";
+            document.getElementById("showRoute").disabled = true;
+            currentList = currentType ? allStations[currentType] : [];
+            showList(currentList);
+        });
+
+        document.getElementById("stationSearch").addEventListener("input", function() {
+            const val = this.value.toLowerCase();
+            showList(currentList.filter(s => s.name.toLowerCase().includes(val)));
+        });
+
+        function showList(list) {
+            const select = document.getElementById("stationList");
+            select.innerHTML = "";
+            list.forEach((station, idx) => {
+                const opt = document.createElement("option");
+                opt.value = idx;
+                opt.text = station.name;
+                select.appendChild(opt);
+            });
+            document.getElementById("showRoute").disabled = list.length === 0;
+        }
+
+        document.getElementById("showRoute").addEventListener("click", function() {
+            const idx = document.getElementById("stationList").value;
+            if (currentList[idx]) {
+                const s = currentList[idx];
+                window.open(
+                    `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`,
+                    '_blank'
+                );
+            }
+        });
+
+        document.getElementById("stationList").addEventListener("change", function() {
+            document.getElementById("showRoute").disabled = !this.value;
+        });
+    </script>
+</body>
+</html>
