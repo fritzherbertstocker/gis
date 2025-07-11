@@ -142,7 +142,7 @@
             allStations = {};
             for (const file of files) {
                 const reader = new FileReader();
-                reader.onload = function(ev) {
+                reader.onloadend = function(ev) {
                     // Stationstyp-Name aus Dateiname (ohne .asc)
                     let type = file.name.replace(/\.asc$/i, '');
                     let stations = parseASC(ev.target.result);
