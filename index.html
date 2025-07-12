@@ -213,7 +213,7 @@
             if (currentList[idx]) {
                 const s = currentList[idx];
                 window.open(
-                    `https://www.google.com/maps/dir/?api=1&destination=${result.lat},${result.lng}`,
+                    `https://www.google.com/maps/dir/?api=1&destination=${result[0].lat},${result[0].lng}`,
                     '_blank'
                 );
             }
