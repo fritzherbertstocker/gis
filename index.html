@@ -206,7 +206,7 @@
 
         document.getElementById("showRoute").addEventListener("click", function() {
             const idx = document.getElementById("stationList").value;
-			let ele = document.getElementById("stationList")[idx];
+			let ele = document.getElementById("stationList")[idx].text;
             if (currentList[idx]) {
                 const s = currentList[idx];
                 window.open(
